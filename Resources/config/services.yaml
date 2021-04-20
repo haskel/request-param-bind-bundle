@@ -1,0 +1,6 @@
+services:
+  haskel.request_param_bind.value_resolver:
+    public: true
+    class: 'Haskel\RequestParamBindBundle\ArgumentResolver\ParamBindValueResolver'
+    tags:
+      - { name: 'controller.argument_value_resolver', priority: 120 }

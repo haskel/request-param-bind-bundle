@@ -1,0 +1,6 @@
+- scalar types
+- array
+- object
+- property name converter
+- tests
+- validations
