@@ -10,12 +10,17 @@ use Haskel\RequestParamBindBundle\Attribute\{
     FromHeader,
     FromQuery,
     ItemType,
-    Required
+    Required,
 };
-use Haskel\RequestParamBindBundle\Exception\UnsupportedConversionException;
+use Haskel\RequestParamBindBundle\Exception\{
+    ExtractionException,
+    UnknownTypeException,
+    UnsupportedConversionException,
+};
 use Haskel\RequestParamBindBundle\FileConverter;
 use Haskel\RequestParamBindBundle\NameConverter;
 use Symfony\Component\HttpFoundation\{File\UploadedFile, FileBag, HeaderBag, ParameterBag, Request};
+use JetBrains\PhpStorm\Pure;
 use Symfony\Component\HttpKernel\Controller\ArgumentValueResolverInterface;
 use Symfony\Component\HttpKernel\ControllerMetadata\ArgumentMetadata;
 use Generator;
@@ -23,23 +28,35 @@ use ReflectionClass;
 
 class ParamBindValueResolver implements ArgumentValueResolverInterface
 {
+    /** @var NameConverter[] */
     private array $nameConverters = [];
+
+    /** @var FileConverter[] */
     private array $fileConverters = [];
 
+    #[Pure]
+    /** {@inheritdoc} */
     public function supports(Request $request, ArgumentMetadata $argument): bool
     {
         return $argument->getAttribute() instanceof BindParamAttribute;
     }
 
+    /**
+     * {@inheritdoc}
+     *
+     * @throws UnknownTypeException|UnsupportedConversionException
+     */
     public function resolve(Request $request, ArgumentMetadata $argument): Generator
     {
+        $attribute = $argument->getAttribute();
+
         yield from match (true) {
-            $argument->getAttribute() instanceof FromQuery  => $this->extractValue($request->query, $argument),
-            $argument->getAttribute() instanceof FromBody   => $this->extractValue($request->request, $argument),
-            $argument->getAttribute() instanceof FromHeader => $this->extractValue($request->headers, $argument),
-            $argument->getAttribute() instanceof FromCookie => $this->extractValue($request->cookies, $argument),
-            $argument->getAttribute() instanceof FromFile   => $this->extractFile($request->files, $argument),
-            default                                         => throw new UnsupportedConversionException("Unknown attribute type. FromQuery, FromBody, FromHeader, FromCookie, FromFile are supported."),
+            $attribute instanceof FromQuery  => $this->extractValue($request->query, $argument),
+            $attribute instanceof FromBody   => $this->extractValue($request->request, $argument),
+            $attribute instanceof FromHeader => $this->extractValue($request->headers, $argument),
+            $attribute instanceof FromCookie => $this->extractValue($request->cookies, $argument),
+            $attribute instanceof FromFile   => $this->extractFile($request->files, $argument),
+            default                          => throw new UnsupportedConversionException("Unknown attribute. FromQuery, FromBody, FromHeader, FromCookie, FromFile are supported."),
         };
     }
 
@@ -60,7 +77,7 @@ class ParamBindValueResolver implements ArgumentValueResolverInterface
         if (!$value instanceof UploadedFile) {
             $fileConverter = $this->fileConverters[$argument->getType()] ?? null;
             if (!$fileConverter) {
-                throw new \InvalidArgumentException(sprintf("File converter for type '%s' not defined.", $argument->getType()));
+                throw new UnsupportedConversionException(sprintf("File converter for type '%s' not defined.", $argument->getType()));
             }
             $value = $fileConverter->convert($value);
         }
@@ -68,17 +85,17 @@ class ParamBindValueResolver implements ArgumentValueResolverInterface
         yield $value;
     }
 
-    private function extractValue(ParameterBag|HeaderBag $bag, ArgumentMetadata $argument)
+    private function extractValue(ParameterBag|HeaderBag $bag, ArgumentMetadata $argument): Generator
     {
         $type = $argument->getType();
 
         switch (true) {
-            case in_array($argument->getType(), ["int", "integer", "string", "float", "boolean", "bool"]):
+            case in_array($type, ["int", "integer", "string", "float", "boolean", "bool"]):
                 $value = $this->tryGetValue($argument->getName(), $bag);
-                yield $this->castScalar($value, $argument->getType());
+                yield $this->castScalar($value, $type);
                 break;
 
-            case $argument->getType() === "array":
+            case $type === "array":
                 yield $this->extractArray($bag, $argument);
                 break;
 
@@ -86,9 +103,12 @@ class ParamBindValueResolver implements ArgumentValueResolverInterface
                 yield from $this->extractVariadic($bag, $argument);
                 break;
 
-            case class_exists($argument->getType()):
-                yield $this->fillObject($bag->all(), $argument->getType());
+            case class_exists($type):
+                yield $this->fillObject($bag->all(), $type);
                 break;
+
+            default:
+                throw new UnknownTypeException(sprintf("Unknown type: %s", $type));
         }
     }
 
@@ -108,7 +128,6 @@ class ParamBindValueResolver implements ArgumentValueResolverInterface
     private function extractVariadic(ParameterBag|HeaderBag $bag, ArgumentMetadata $argument): Generator
     {
         $items = $this->tryGetValue($argument->getName(), $bag);
-        $objects = [];
         $type = $argument->getType();
 
         foreach ($items as $item) {
@@ -129,7 +148,7 @@ class ParamBindValueResolver implements ArgumentValueResolverInterface
         return null;
     }
 
-    private function fillObject(array $parameters, string $type)
+    private function fillObject(array $parameters, string $type): object
     {
         $object = new $type;
 
@@ -142,7 +161,7 @@ class ParamBindValueResolver implements ArgumentValueResolverInterface
                 $attribute = $reflectionAttribute->newInstance();
 
                 if ($attribute instanceof Required && !$hasValue && !$property->getDefaultValue()) {
-                    throw new \InvalidArgumentException(sprintf("property '%s' should be filled", $property->getName()));
+                    throw new ExtractionException(sprintf("Property '%s->%s' marked as required and should be filled or should have default value", $type, $property->getName()));
                 }
 
                 if ($attribute instanceof ItemType
@@ -175,10 +194,14 @@ class ParamBindValueResolver implements ArgumentValueResolverInterface
 
     private function tryName(string $name): Generator
     {
-        yield $name;
-
         foreach ($this->nameConverters as $converter) {
+            if (!$converter->supports($name)) {
+                continue;
+            }
+
             yield $converter->convert($name);
         }
+
+        yield $name;
     }
 }
