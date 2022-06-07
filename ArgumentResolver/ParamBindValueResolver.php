@@ -72,7 +72,7 @@ class ParamBindValueResolver implements ArgumentValueResolverInterface
                 $attribute instanceof FromHeader => $this->extractValue($request->headers, $argument),
                 $attribute instanceof FromCookie => $this->extractValue($request->cookies, $argument),
                 $attribute instanceof FromFile   => $this->extractFile($request->files, $argument),
-                $attribute instanceof FromRoute  => $this->extractPathValue($request, $argument),
+                $attribute instanceof FromRoute  => throw new UnsupportedConversionException("Unknown attribute. FromQuery, FromBody, FromHeader, FromCookie, FromFile are supported."),
                 default                          => throw new UnsupportedConversionException("Unknown attribute. FromQuery, FromBody, FromHeader, FromCookie, FromFile are supported."),
             };
         }
@@ -122,26 +122,6 @@ class ParamBindValueResolver implements ArgumentValueResolverInterface
                 break;
 
             case enum_exists($type):
-//                $value = $bag->get($argument->getName());
-//
-//                if (null === $value) {
-//                    yield null;
-//
-//                    return;
-//                }
-//
-//                if (!is_int($value) && !is_string($value)) {
-//                    throw new LogicException(sprintf('Could not resolve the "%s $%s" controller argument: expecting an int or string, got %s.', $argument->getType(), $argument->getName(), get_debug_type($value)));
-//                }
-//
-//                /** @var class-string<\BackedEnum> $enumType */
-//                $enumType = $argument->getType();
-//
-//                try {
-//                    yield $enumType::from($value);
-//                } catch (ValueError $error) {
-//                    throw new ExtractionException(sprintf('Could not resolve the "%s $%s" controller argument: %s', $argument->getType(), $argument->getName(), $error->getMessage()), $error);
-//                }
                 yield from $this->extractEnum($bag, $argument);
                 break;
 
@@ -245,11 +225,6 @@ class ParamBindValueResolver implements ArgumentValueResolverInterface
         }
 
         yield $name;
-    }
-
-    private function extractPathValue(Request $request, ArgumentMetadata $argument)
-    {
-        yield '';
     }
 
     private function extractEnum(ParameterBag|HeaderBag $bag, ArgumentMetadata $argument)
