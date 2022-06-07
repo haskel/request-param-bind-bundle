@@ -1,0 +1,9 @@
+- property name converter
+- tests
+- validations
+- only allowed names
+- disable default name converters
+- prioritization of NameConverters
+- save parsed reflections for prod
+- name converters for object filling
+- different name converters for query + body, headers, cookies, files
