@@ -9,6 +9,7 @@ use Haskel\RequestParamBindBundle\Attribute\{
     FromFile,
     FromHeader,
     FromQuery,
+    FromRoute,
     ItemType,
     Required,
 };
@@ -56,6 +57,7 @@ class ParamBindValueResolver implements ArgumentValueResolverInterface
             $attribute instanceof FromHeader => $this->extractValue($request->headers, $argument),
             $attribute instanceof FromCookie => $this->extractValue($request->cookies, $argument),
             $attribute instanceof FromFile   => $this->extractFile($request->files, $argument),
+            $attribute instanceof FromRoute  => $this->extractPathValue($request, $argument),
             default                          => throw new UnsupportedConversionException("Unknown attribute. FromQuery, FromBody, FromHeader, FromCookie, FromFile are supported."),
         };
     }
@@ -203,5 +205,10 @@ class ParamBindValueResolver implements ArgumentValueResolverInterface
         }
 
         yield $name;
+    }
+
+    private function extractPathValue(Request $request, ArgumentMetadata $argument)
+    {
+        yield '';
     }
 }
