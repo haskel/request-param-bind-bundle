@@ -3,10 +3,9 @@
 namespace Haskel\RequestParamBindBundle\Attribute;
 
 use Attribute;
-use Symfony\Component\HttpKernel\Attribute\ArgumentInterface;
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
-class FromRoute implements BindParamAttribute, ArgumentInterface
+class FromRoute implements BindParamAttribute
 {
     /**
      * json|xml|form-encoded|custom

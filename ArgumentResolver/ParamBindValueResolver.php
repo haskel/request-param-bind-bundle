@@ -20,12 +20,20 @@ use Haskel\RequestParamBindBundle\Exception\{
 };
 use Haskel\RequestParamBindBundle\FileConverter;
 use Haskel\RequestParamBindBundle\NameConverter;
-use Symfony\Component\HttpFoundation\{File\UploadedFile, FileBag, HeaderBag, ParameterBag, Request};
+use Symfony\Component\HttpFoundation\{File\UploadedFile, FileBag, HeaderBag, InputBag, ParameterBag, Request};
 use JetBrains\PhpStorm\Pure;
+use LogicException;
 use Symfony\Component\HttpKernel\Controller\ArgumentValueResolverInterface;
 use Symfony\Component\HttpKernel\ControllerMetadata\ArgumentMetadata;
 use Generator;
 use ReflectionClass;
+
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+
+use ValueError;
+
+use function is_int;
+use function is_string;
 
 class ParamBindValueResolver implements ArgumentValueResolverInterface
 {
@@ -39,7 +47,13 @@ class ParamBindValueResolver implements ArgumentValueResolverInterface
     /** {@inheritdoc} */
     public function supports(Request $request, ArgumentMetadata $argument): bool
     {
-        return $argument->getAttribute() instanceof BindParamAttribute;
+        foreach ($argument->getAttributes() as $attribute) {
+            if ($attribute instanceof BindParamAttribute) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -49,17 +63,19 @@ class ParamBindValueResolver implements ArgumentValueResolverInterface
      */
     public function resolve(Request $request, ArgumentMetadata $argument): Generator
     {
-        $attribute = $argument->getAttribute();
+        $attributes = $argument->getAttributes();
 
-        yield from match (true) {
-            $attribute instanceof FromQuery  => $this->extractValue($request->query, $argument),
-            $attribute instanceof FromBody   => $this->extractValue($request->request, $argument),
-            $attribute instanceof FromHeader => $this->extractValue($request->headers, $argument),
-            $attribute instanceof FromCookie => $this->extractValue($request->cookies, $argument),
-            $attribute instanceof FromFile   => $this->extractFile($request->files, $argument),
-            $attribute instanceof FromRoute  => $this->extractPathValue($request, $argument),
-            default                          => throw new UnsupportedConversionException("Unknown attribute. FromQuery, FromBody, FromHeader, FromCookie, FromFile are supported."),
-        };
+        foreach ($attributes as $attribute) {
+            yield from match (true) {
+                $attribute instanceof FromQuery  => $this->extractValue($request->query, $argument),
+                $attribute instanceof FromBody   => $this->extractValue($request->request, $argument),
+                $attribute instanceof FromHeader => $this->extractValue($request->headers, $argument),
+                $attribute instanceof FromCookie => $this->extractValue($request->cookies, $argument),
+                $attribute instanceof FromFile   => $this->extractFile($request->files, $argument),
+                $attribute instanceof FromRoute  => $this->extractPathValue($request, $argument),
+                default                          => throw new UnsupportedConversionException("Unknown attribute. FromQuery, FromBody, FromHeader, FromCookie, FromFile are supported."),
+            };
+        }
     }
 
     public function addNameConverter(NameConverter $nameConverter): void
@@ -103,6 +119,30 @@ class ParamBindValueResolver implements ArgumentValueResolverInterface
 
             case $argument->isVariadic():
                 yield from $this->extractVariadic($bag, $argument);
+                break;
+
+            case enum_exists($type):
+//                $value = $bag->get($argument->getName());
+//
+//                if (null === $value) {
+//                    yield null;
+//
+//                    return;
+//                }
+//
+//                if (!is_int($value) && !is_string($value)) {
+//                    throw new LogicException(sprintf('Could not resolve the "%s $%s" controller argument: expecting an int or string, got %s.', $argument->getType(), $argument->getName(), get_debug_type($value)));
+//                }
+//
+//                /** @var class-string<\BackedEnum> $enumType */
+//                $enumType = $argument->getType();
+//
+//                try {
+//                    yield $enumType::from($value);
+//                } catch (ValueError $error) {
+//                    throw new ExtractionException(sprintf('Could not resolve the "%s $%s" controller argument: %s', $argument->getType(), $argument->getName(), $error->getMessage()), $error);
+//                }
+                yield from $this->extractEnum($bag, $argument);
                 break;
 
             case class_exists($type):
@@ -210,5 +250,29 @@ class ParamBindValueResolver implements ArgumentValueResolverInterface
     private function extractPathValue(Request $request, ArgumentMetadata $argument)
     {
         yield '';
+    }
+
+    private function extractEnum(ParameterBag|HeaderBag $bag, ArgumentMetadata $argument)
+    {
+        $value = $bag->get($argument->getName());
+
+        if (null === $value) {
+            yield null;
+
+            return;
+        }
+
+        if (!is_int($value) && !is_string($value)) {
+            throw new LogicException(sprintf('Could not resolve the "%s $%s" controller argument: expecting an int or string, got %s.', $argument->getType(), $argument->getName(), get_debug_type($value)));
+        }
+
+        /** @var class-string<\BackedEnum> $enumType */
+        $enumType = $argument->getType();
+
+        try {
+            yield $enumType::from($value);
+        } catch (ValueError $error) {
+            throw new ExtractionException(sprintf('Could not resolve the "%s $%s" controller argument: %s', $argument->getType(), $argument->getName(), $error->getMessage()), $error);
+        }
     }
 }

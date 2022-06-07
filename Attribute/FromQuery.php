@@ -3,10 +3,9 @@
 namespace Haskel\RequestParamBindBundle\Attribute;
 
 use Attribute;
-use Symfony\Component\HttpKernel\Attribute\ArgumentInterface;
 
 #[Attribute(Attribute::TARGET_PARAMETER)]
-class FromQuery implements BindParamAttribute, ArgumentInterface
+class FromQuery implements BindParamAttribute
 {
     public ?string $format;
 
