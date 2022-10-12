@@ -1,6 +1,6 @@
 ## Query
 `name=John&surname=Smith`
-```
+```php
 class Controller 
 {
 
@@ -13,7 +13,7 @@ class Controller
 
 
 `name=John&surname=Smith&middleName=Dude`
-```
+```php
 class Person 
 {
     public ?string $name;
@@ -33,7 +33,7 @@ class Controller
 
 
 `filter[price][from]=10&filter[price][to]=300`
-```
+```php
 class Filter 
 {
     public ?PriceRange $price;
@@ -57,7 +57,7 @@ class Controller
 
 `page=3&itemsPerPage=100&filter[price][from]=10&filter[price][to]=300`
 
-```
+```php
 class Filter 
 {
     public ?PriceRange $price;
@@ -87,7 +87,7 @@ class Controller
 
 `filter[name][0]=location&filter[value][0]=California&filter[name][1]=maxPrice&filter[value][1]=300`
 
-```
+```php
 class Filter 
 {
     public string $name;
